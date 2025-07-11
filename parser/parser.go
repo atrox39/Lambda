@@ -1,4 +1,3 @@
-// parser/parser.go
 package parser
 
 import (
@@ -10,22 +9,20 @@ import (
 	"github.com/atrox39/lambda/token"
 )
 
-// Precedencia de operadores
 const (
 	_ int = iota
 	LOWEST
-	ASSIGN_PRECEDENCE // = (right-associative)
-	EQUALS            // ==, !=
-	LESSGREATER       // > o <
-	SUM               // +
-	PRODUCT           // *
-	PREFIX            // -X o !X
-	DOT_ACCESS        // object.member (higher than CALL)
-	CALL              // myFunction(X)
-	INDEX             // array[index]
+	ASSIGN_PRECEDENCE
+	EQUALS
+	LESSGREATER
+	SUM
+	PRODUCT
+	PREFIX
+	DOT_ACCESS
+	CALL
+	INDEX
 )
 
-// precedences mapea tipos de token a su nivel de precedencia.
 var precedences = map[token.TokenType]int{
 	token.ASSIGN:   ASSIGN_PRECEDENCE,
 	token.EQ:       EQUALS,
@@ -41,31 +38,24 @@ var precedences = map[token.TokenType]int{
 	token.DOT:      DOT_ACCESS,
 }
 
-// Parser es la estructura que construye el AST a partir de los tokens.
 type Parser struct {
-	l *lexer.Lexer // El lexer asociado
+	l *lexer.Lexer
 
-	currentToken token.Token // El token actual bajo examen
-	peekToken    token.Token // El siguiente token (peek, no consumido)
+	currentToken token.Token
+	peekToken    token.Token
 
-	errors []string // Errores de parsing
+	errors []string
 
-	// Mapas para registrar funciones de parsing de prefijos y infijos.
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 }
 
-// prefixParseFn es el tipo de función para parsear expresiones prefijo.
 type prefixParseFn func() ast.Expression
-
-// infixParseFn es el tipo de función para parsear expresiones infijo.
 type infixParseFn func(ast.Expression) ast.Expression
 
-// NewParser crea una nueva instancia del Parser.
 func NewParser(l *lexer.Lexer) *Parser {
 	p := &Parser{l: l, errors: []string{}}
 
-	// Registra las funciones de parsing de prefijos.
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
@@ -75,16 +65,15 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.VOID, p.parseFunctionLiteral)
-	p.registerPrefix(token.TYPE_INT, p.parseFunctionLiteral) // Tipos también pueden iniciar literales de función (ej. int() { ... })
+	p.registerPrefix(token.TYPE_INT, p.parseFunctionLiteral)
 	p.registerPrefix(token.TYPE_STRING, p.parseFunctionLiteral)
 	p.registerPrefix(token.TYPE_BOOLEAN, p.parseFunctionLiteral)
 	p.registerPrefix(token.TYPE_ANY, p.parseFunctionLiteral)
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
 	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 	p.registerPrefix(token.NEW, p.parseNewExpression)
-	p.registerPrefix(token.THIS, p.parseThisExpression)     // Nuevo
+	p.registerPrefix(token.THIS, p.parseThisExpression)
 
-	// Registra las funciones de parsing de infijos.
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
@@ -96,35 +85,29 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.GT, p.parseInfixExpression)
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
-	p.registerInfix(token.DOT, p.parseDotExpression)           // Nuevo: para acceso a miembros (p.saludar())
-	p.registerInfix(token.ASSIGN, p.parseAssignmentExpression) // Nuevo: para asignaciones
+	p.registerInfix(token.DOT, p.parseDotExpression)
+	p.registerInfix(token.ASSIGN, p.parseAssignmentExpression)
 
-	// Lee dos tokens para inicializar currentToken y peekToken.
 	p.nextToken()
 	p.nextToken()
 
 	return p
 }
 
-// Errors devuelve los errores de parsing acumulados.
 func (p *Parser) Errors() []string {
 	return p.errors
 }
-
-// peekError añade un error si el siguiente token no es del tipo esperado.
 func (p *Parser) peekError(t token.TokenType) {
 	msg := fmt.Sprintf("Se esperaba el siguiente token de tipo %s, pero se obtuvo %s (%s)",
 		t, p.peekToken.Type, p.peekToken.Literal)
 	p.errors = append(p.errors, msg)
 }
 
-// nextToken avanza currentToken y peekToken.
 func (p *Parser) nextToken() {
 	p.currentToken = p.peekToken
 	p.peekToken = p.l.NextToken()
 }
 
-// expectPeek verifica si el siguiente token es del tipo esperado y lo consume.
 func (p *Parser) expectPeek(t token.TokenType) bool {
 	if p.peekTokenIs(t) {
 		p.nextToken()
@@ -135,17 +118,14 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 	}
 }
 
-// currentTokenIs verifica si el token actual es del tipo dado.
 func (p *Parser) currentTokenIs(t token.TokenType) bool {
 	return p.currentToken.Type == t
 }
 
-// peekTokenIs verifica si el siguiente token es del tipo dado.
 func (p *Parser) peekTokenIs(t token.TokenType) bool {
 	return p.peekToken.Type == t
 }
 
-// peekPrecedence devuelve la precedencia del siguiente token.
 func (p *Parser) peekPrecedence() int {
 	if p, ok := precedences[p.peekToken.Type]; ok {
 		return p
@@ -153,7 +133,6 @@ func (p *Parser) peekPrecedence() int {
 	return LOWEST
 }
 
-// currentPrecedence devuelve la precedencia del token actual.
 func (p *Parser) currentPrecedence() int {
 	if p, ok := precedences[p.currentToken.Type]; ok {
 		return p
@@ -161,17 +140,14 @@ func (p *Parser) currentPrecedence() int {
 	return LOWEST
 }
 
-// registerPrefix registra una función de parsing para un tipo de token prefijo.
 func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
 	p.prefixParseFns[tokenType] = fn
 }
 
-// registerInfix registra una función de parsing para un tipo de token infijo.
 func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
 	p.infixParseFns[tokenType] = fn
 }
 
-// ParseProgram parsea el programa completo y devuelve el AST.
 func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
 	program.Statements = []ast.Statement{}
@@ -186,7 +162,6 @@ func (p *Parser) ParseProgram() *ast.Program {
 	return program
 }
 
-// ---- CAMBIOS PRINCIPALES COMIENZAN AQUÍ ----
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case token.LET:
@@ -195,71 +170,41 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseReturnStatement()
 	case token.IF:
 		return p.parseIfExpression()
-	case token.CLASS: // Nueva declaración de clase
-		return p.parseClassStatement(nil) // Nil indica que no hay modificador previo
-	case token.PUBLIC, token.PRIVATE, token.PROTECTED: // Modificador al inicio
+	case token.CLASS:
+		return p.parseClassStatement(nil)
+	case token.PUBLIC, token.PRIVATE, token.PROTECTED:
 		return p.parseStatementWithModifier()
 	case token.LOG:
 		return p.parseLogStatement()
-	// VOID o TYPE al inicio de un statement puede ser una declaración de función global
-	// o un literal de función usado como expresión en un ExpressionStatement.
 	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY:
-		// Para distinguir, necesitamos ver si sigue un IDENT (nombre de func) y luego LPAREN.
-		// Esto es complicado sin lookahead > 1.
-		// Heurística: si después de (TYPE|VOID) hay IDENT y luego LPAREN, es FunctionDeclaration.
-		// Esta heurística es imperfecta. Monkey lo resuelve porque FunctionLiteral no es un Statement.
 		if p.peekTokenIs(token.IDENT) && p.isFunctionDeclarationAhead() {
-			return p.parseFunctionDeclaration(p.currentToken) // Pasar el tipo/void como token inicial
+			return p.parseFunctionDeclaration(p.currentToken)
 		}
-		// Si no, es un ExpressionStatement (ej. (void(){})() o un tipo solo que es error)
 		return p.parseExpressionStatement()
 	default:
 		return p.parseExpressionStatement()
 	}
 }
 
-// isFunctionDeclarationAhead es una heurística.
-// Verifica si después del actual IDENT (que es p.peekToken), sigue un LPAREN.
-// Se llama cuando currentToken es TYPE/VOID y peekToken es IDENT.
 func (p *Parser) isFunctionDeclarationAhead() bool {
-    // Necesitamos mirar p.peekToken (que es IDENT) y el token DESPUÉS de ese.
-    // Esto es LL(2). El lexer actual no lo soporta directamente.
-    // Esta función es una simplificación conceptual.
-    // Una implementación real requeriría un lexer con buffer o parseo especulativo.
-    // Por ahora, esta función no puede implementarse de forma robusta.
-    // La lógica en parseStatement se basará en una detección más simple o aceptará ambigüedad
-    // que se resolvería semánticamente o con errores de parsing más adelante.
-	// Para una prueba simple, si el siguiente al IDENT (p.peekToken) es LPAREN, es probable.
-	// Esto es lo que el parser de Pratt hace implícitamente para llamadas.
-	// No podemos hacer esto aquí sin cambiar el estado del parser o lexer.
-	// Devolvemos false para evitar complejidad ahora.
-	// El parser de Monkey original no permite `func foo() {}` como statement directamente,
-	// sino `let foo = func() {};`
-	// Si Lambda permite `void foo() {}` a nivel global, esta detección es crucial.
-    return false // Simplificación: esta heurística es difícil de implementar correctamente aquí.
-                 // El parser de Monkey original no tiene declaraciones de función nombradas globales así.
-                 // Las funciones son expresiones asignadas a 'let'.
-                 // Si Lambda sí las tiene, esto necesita una solución LL(2).
+	return false
 }
 
-// parseStatementWithModifier maneja declaraciones que comienzan con public, private, protected.
 func (p *Parser) parseStatementWithModifier() ast.Statement {
 	modifier := p.currentToken
-	p.nextToken() // Consume el modificador
+	p.nextToken()
 
 	switch p.currentToken.Type {
 	case token.CLASS:
-		return p.parseClassStatement(&modifier) // Pasar el modificador
+		return p.parseClassStatement(&modifier)
 	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY:
-		// Es una declaración de función con modificador: public void miFuncion()...
-		// p.currentToken es ahora el tipo/void.
-		return p.parseFunctionDeclaration(modifier) // El parser de función manejará el tipo actual
+		return p.parseFunctionDeclaration(modifier)
 	default:
 		p.errors = append(p.errors, fmt.Sprintf("Token inesperado '%s' después del modificador '%s'", p.currentToken.Literal, modifier.Literal))
 		return nil
 	}
 }
-// parseLetStatement parsea una declaración 'let'.
+
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.currentToken}
 
@@ -311,8 +256,6 @@ func (p *Parser) currentTokenIsTypeOrVoid() bool {
 	return tt == token.TYPE_INT || tt == token.TYPE_STRING || tt == token.TYPE_BOOLEAN || tt == token.TYPE_ANY || tt == token.VOID
 }
 
-
-// peekTokenIsType verifica si el siguiente token es un tipo de dato conocido o IDENT (para clases).
 func (p *Parser) peekTokenIsType() bool {
 	switch p.peekToken.Type {
 	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT:
@@ -322,7 +265,6 @@ func (p *Parser) peekTokenIsType() bool {
 	}
 }
 
-// currentTokenIsType verifica si el token actual es un tipo de dato conocido o IDENT.
 func (p *Parser) currentTokenIsType() bool {
 	switch p.currentToken.Type {
 	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT:
@@ -340,11 +282,10 @@ func (p *Parser) currentTokenIsModifier() bool {
 	}
 }
 
-// parseReturnStatement parsea una declaración 'return'.
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	stmt := &ast.ReturnStatement{Token: p.currentToken}
 
-	p.nextToken() // Avanza al inicio de la expresión de retorno
+	p.nextToken()
 
 	stmt.ReturnValue = p.parseExpression(LOWEST)
 
@@ -355,7 +296,6 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	return stmt
 }
 
-// parseExpressionStatement parsea una expresión usada como declaración.
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.currentToken}
 	stmt.Expression = p.parseExpression(LOWEST)
@@ -367,16 +307,9 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
-
-
-
-
-// parseIdentifier parsea un identificador.
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 }
-
-// parseIntegerLiteral parsea un literal entero.
 func (p *Parser) parseIntegerLiteral() ast.Expression {
 	lit := &ast.IntegerLiteral{Token: p.currentToken}
 
@@ -390,12 +323,9 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	return lit
 }
 
-// parseStringLiteral parsea un literal de cadena.
 func (p *Parser) parseStringLiteral() ast.Expression {
 	return &ast.StringLiteral{Token: p.currentToken, Value: p.currentToken.Literal}
 }
-
-// parsePrefixExpression parsea una expresión prefijo.
 func (p *Parser) parsePrefixExpression() ast.Expression {
 	expression := &ast.PrefixExpression{
 		Token:    p.currentToken,
@@ -406,7 +336,6 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	return expression
 }
 
-// parseInfixExpression parsea una expresión infijo.
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	expression := &ast.InfixExpression{
 		Token:    p.currentToken,
@@ -419,29 +348,22 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	return expression
 }
 
-// parseAssignmentExpression parsea una expresión de asignación.
-// 'left' es la expresión en el lado izquierdo de la asignación (ej. identificador, expresión de punto).
-// El token ASSIGN (p.currentToken) ya ha sido consumido por el bucle de parseExpression.
 func (p *Parser) parseAssignmentExpression(left ast.Expression) ast.Expression {
 	exp := &ast.AssignmentExpression{
-		Token: p.currentToken, // Este es el token ASSIGN
+		Token: p.currentToken,
 		Left:  left,
 	}
-	// Avanza al siguiente token después del operador ASSIGN (el inicio de la expresión de valor)
 	p.nextToken()
-	// Parsea el lado derecho con la precedencia más baja para asegurar que se parsee completamente.
 	exp.Value = p.parseExpression(LOWEST)
 	return exp
 }
 
-// parseBoolean parsea un literal booleano.
 func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.currentToken, Value: p.currentTokenIs(token.TRUE)}
 }
 
-// parseGroupedExpression parsea una expresión entre paréntesis.
 func (p *Parser) parseGroupedExpression() ast.Expression {
-	p.nextToken() // Consume el LPAREN
+	p.nextToken()
 	exp := p.parseExpression(LOWEST)
 	if !p.expectPeek(token.RPAREN) {
 		return nil
@@ -449,9 +371,7 @@ func (p *Parser) parseGroupedExpression() ast.Expression {
 	return exp
 }
 
-// parseFunctionLiteral parsea una expresión de función (ej. void(int x, string y) { ... }).
 func (p *Parser) parseFunctionLiteral() ast.Expression {
-	// currentToken es el tipo de retorno (ej. VOID, TYPE_INT, etc.)
 	lit := &ast.FunctionLiteral{Token: p.currentToken, ReturnType: &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}}
 
 	if !p.expectPeek(token.LPAREN) {
@@ -469,33 +389,31 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 	return lit
 }
 
-// parseFunctionDeclaration parsea una declaración de función (void funcName(int a, string b): int { ... }).
 func (p *Parser) parseFunctionDeclaration(initialToken token.Token) *ast.FunctionDeclaration {
-	// initialToken es el tipo de retorno (ej. VOID, TYPE_INT, etc.) o el modificador
 	decl := &ast.FunctionDeclaration{Token: initialToken, ReturnType: &ast.Identifier{Token: initialToken, Value: initialToken.Literal}}
 
-	if !p.expectPeek(token.IDENT) { // Espera el nombre de la función
+	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
 	decl.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-	if !p.expectPeek(token.LPAREN) { // Espera '(' para los parámetros
+	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
 
 	decl.Parameters = p.parseFunctionParameters()
 
-	if p.peekTokenIs(token.COLON) { // Opcional: tipo de retorno explícito después de los parámetros
-		p.nextToken() // Consume COLON
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken()
 		if !p.peekTokenIsType() {
 			p.peekError(token.IDENT)
 			return nil
 		}
-		p.nextToken() // Consume el token de tipo
+		p.nextToken()
 		decl.ReturnType = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	}
 
-	if !p.expectPeek(token.LBRACE) { // Espera '{' para el cuerpo
+	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
 
@@ -504,30 +422,27 @@ func (p *Parser) parseFunctionDeclaration(initialToken token.Token) *ast.Functio
 	return decl
 }
 
-// parseFunctionParameters parsea los parámetros de una función, incluyendo sus tipos.
-// Espera una lista como (nombre: string, edad: int)
 func (p *Parser) parseFunctionParameters() []*ast.Parameter {
 	parameters := []*ast.Parameter{}
 
-	if p.peekTokenIs(token.RPAREN) { // Caso de función sin parámetros: `()`
+	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()
 		return parameters
 	}
 
-	p.nextToken() // Consume el primer token (que debería ser un IDENT)
+	p.nextToken()
 
-	// Primer parámetro
 	param := &ast.Parameter{}
-	if p.currentTokenIs(token.IDENT) { // Espera el nombre del parámetro
+	if p.currentTokenIs(token.IDENT) {
 		param.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-		if p.peekTokenIs(token.COLON) { // Opcional: anotación de tipo
-			p.nextToken()             // Consume COLON
-			if !p.peekTokenIsType() { // Espera un token de tipo
-				p.peekError(token.IDENT) // Podría ser un IDENT que actúa como tipo (ej. nombre de clase)
+		if p.peekTokenIs(token.COLON) {
+			p.nextToken()
+			if !p.peekTokenIsType() {
+				p.peekError(token.IDENT)
 				return nil
 			}
-			p.nextToken() // Consume el token de tipo
+			p.nextToken()
 			param.TypeAnnotation = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 		}
 	} else {
@@ -536,22 +451,21 @@ func (p *Parser) parseFunctionParameters() []*ast.Parameter {
 	}
 	parameters = append(parameters, param)
 
-	// Parámetros subsiguientes
 	for p.peekTokenIs(token.COMMA) {
-		p.nextToken() // Consume la coma
-		p.nextToken() // Consume el siguiente token (que debería ser un IDENT)
+		p.nextToken()
+		p.nextToken()
 
 		param = &ast.Parameter{}
-		if p.currentTokenIs(token.IDENT) { // Espera el nombre del parámetro
+		if p.currentTokenIs(token.IDENT) {
 			param.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-			if p.peekTokenIs(token.COLON) { // Opcional: anotación de tipo
-				p.nextToken()             // Consume COLON
-				if !p.peekTokenIsType() { // Espera un token de tipo
+			if p.peekTokenIs(token.COLON) {
+				p.nextToken()
+				if !p.peekTokenIsType() {
 					p.peekError(token.IDENT)
 					return nil
 				}
-				p.nextToken() // Consume el token de tipo
+				p.nextToken()
 				param.TypeAnnotation = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 			}
 		} else {
@@ -568,14 +482,12 @@ func (p *Parser) parseFunctionParameters() []*ast.Parameter {
 	return parameters
 }
 
-// parseCallExpression parsea una llamada a función.
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	exp := &ast.CallExpression{Token: p.currentToken, Function: function}
 	exp.Arguments = p.parseCallArguments()
 	return exp
 }
 
-// parseCallArguments parsea los argumentos de una llamada a función.
 func (p *Parser) parseCallArguments() []ast.Expression {
 	args := []ast.Expression{}
 
@@ -584,13 +496,12 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 		return args
 	}
 
-	p.nextToken() // Consume el primer argumento
-
+	p.nextToken()
 	args = append(args, p.parseExpression(LOWEST))
 
 	for p.peekTokenIs(token.COMMA) {
-		p.nextToken() // Consume la coma
-		p.nextToken() // Consume el siguiente argumento
+		p.nextToken()
+		p.nextToken()
 		args = append(args, p.parseExpression(LOWEST))
 	}
 
@@ -601,19 +512,17 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 	return args
 }
 
-// parseBlockStatement parsea un bloque de código (ej. el cuerpo de una función o un if/else).
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.currentToken}
 	block.Statements = []ast.Statement{}
 
-	p.nextToken() // Consume el LBRACE
+	p.nextToken()
 
 	for !p.currentTokenIs(token.RBRACE) && !p.currentTokenIs(token.EOF) {
 		stmt := p.parseStatement()
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		}
-		// Solo avanzamos el token si el statement no consumió el RBRACE o EOF
 		if !p.currentTokenIs(token.RBRACE) && !p.currentTokenIs(token.EOF) {
 			p.nextToken()
 		}
@@ -621,30 +530,29 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	return block
 }
 
-// parseIfExpression parsea una expresión 'if'.
 func (p *Parser) parseIfExpression() ast.Statement {
 	expression := &ast.IfExpression{Token: p.currentToken}
 
-	if !p.expectPeek(token.LPAREN) { // Espera '(' después de 'if'
+	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
 
-	p.nextToken() // Avanza a la condición
+	p.nextToken()
 	expression.Condition = p.parseExpression(LOWEST)
 
-	if !p.expectPeek(token.RPAREN) { // Espera ')' después de la condición
+	if !p.expectPeek(token.RPAREN) {
 		return nil
 	}
 
-	if !p.expectPeek(token.LBRACE) { // Espera '{' para el bloque de consecuencia
+	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
 
 	expression.Consequence = p.parseBlockStatement()
 
-	if p.peekTokenIs(token.ELSE) { // Si hay un 'else'
-		p.nextToken()                    // Consume 'else'
-		if !p.expectPeek(token.LBRACE) { // Espera '{' para el bloque alternativo
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+		if !p.expectPeek(token.LBRACE) {
 			return nil
 		}
 		expression.Alternative = p.parseBlockStatement()
@@ -674,14 +582,12 @@ func (p *Parser) parseLogStatement() ast.Statement {
 	return stmt
 }
 
-// parseArrayLiteral parsea un literal de array.
 func (p *Parser) parseArrayLiteral() ast.Expression {
 	array := &ast.ArrayLiteral{Token: p.currentToken}
 	array.Elements = p.parseExpressionList(token.RBRACKET)
 	return array
 }
 
-// parseExpressionList es una función auxiliar para parsear listas de expresiones (ej. argumentos de función, elementos de array).
 func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
 	list := []ast.Expression{}
 
@@ -690,13 +596,13 @@ func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
 		return list
 	}
 
-	p.nextToken() // Consume el primer elemento
+	p.nextToken()
 
 	list = append(list, p.parseExpression(LOWEST))
 
 	for p.peekTokenIs(token.COMMA) {
-		p.nextToken() // Consume la coma
-		p.nextToken() // Consume el siguiente elemento
+		p.nextToken()
+		p.nextToken()
 		list = append(list, p.parseExpression(LOWEST))
 	}
 
@@ -707,11 +613,10 @@ func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
 	return list
 }
 
-// parseIndexExpression parsea una expresión de índice.
 func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
 	exp := &ast.IndexExpression{Token: p.currentToken, Left: left}
 
-	p.nextToken() // Consume el LBRACKET
+	p.nextToken()
 	exp.Index = p.parseExpression(LOWEST)
 
 	if !p.expectPeek(token.RBRACKET) {
@@ -721,11 +626,10 @@ func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
 	return exp
 }
 
-// parseModuleStatement parsea una declaración 'module'.
 func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 	stmt := &ast.ModuleStatement{Token: p.currentToken}
 
-	p.nextToken() // Consume 'module'
+	p.nextToken()
 
 	switch p.currentToken.Type {
 	case token.LET:
@@ -735,9 +639,7 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 		}
 		stmt.Value = letStmt
 		stmt.Name = letStmt.Name
-	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY: // Es una declaración de función con tipo de retorno
-		// currentToken es el tipo de retorno.
-		// Peek el IDENT para el nombre de la función para diferenciar de FunctionLiteral.
+	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY:
 		if p.peekTokenIs(token.IDENT) {
 			funcDecl := p.parseFunctionDeclaration(p.currentToken)
 			if funcDecl == nil {
@@ -761,8 +663,6 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 		return nil
 	}
 
-	// Para declaraciones simples como 'module let x = 10;', se consume un punto y coma.
-	// Las funciones y clases tienen sus propios bloques.
 	_, isLet := stmt.Value.(*ast.LetStatement)
 	if isLet && p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
@@ -771,73 +671,64 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 	return stmt
 }
 
-// parseClassStatement parsea una declaración 'class'.
 func (p *Parser) parseClassStatement(modifier *token.Token) *ast.ClassStatement {
 	stmt := &ast.ClassStatement{Token: p.currentToken}
 
-	if !p.expectPeek(token.IDENT) { // Espera el nombre de la clase
+	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
 	stmt.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-	if p.peekTokenIs(token.EXTENDS) { // Opcional: herencia
-		p.nextToken()                   // Consume EXTENDS
-		if !p.expectPeek(token.IDENT) { // Espera el nombre de la superclase
+	if p.peekTokenIs(token.EXTENDS) {
+		p.nextToken()
+		if !p.expectPeek(token.IDENT) {
 			return nil
 		}
 		stmt.SuperClass = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	}
 
-	if !p.expectPeek(token.LBRACE) { // Espera '{' para el cuerpo de la clase
+	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
 
-	stmt.Body = p.parseClassBody(stmt.Name.Value) // Pasa el nombre de la clase para identificar el constructor
+	stmt.Body = p.parseClassBody(stmt.Name.Value)
 
 	return stmt
 }
 
-// parseClassBody parsea el cuerpo de una clase, incluyendo métodos y propiedades.
 func (p *Parser) parseClassBody(className string) *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.currentToken}
 	block.Statements = []ast.Statement{}
 
-	p.nextToken() // Consume el LBRACE
+	p.nextToken()
 
 	for !p.currentTokenIs(token.RBRACE) && !p.currentTokenIs(token.EOF) {
 		var member ast.Statement = nil
-		// Prioridad: Constructor > Método > Propiedad
 
-		// 1. Intentar parsear como Constructor: ClassName(args) { ... }
 		if p.currentTokenIs(token.IDENT) && p.currentToken.Literal == className && p.peekTokenIs(token.LPAREN) {
-			member = p.parseMethodDeclaration(true) // true indica que es constructor
+			member = p.parseMethodDeclaration(true)
 		} else if p.currentTokenIs(token.VOID) || p.currentTokenIsType() {
-			// 2. Intentar parsear como Método: Type methodName(args): Type { ... }
-			// Asegurarse de que no sea una expresión de función anónima (void(args){...})
-			// La diferencia es que un método siempre tiene un nombre después del tipo de retorno.
-			if p.peekTokenIs(token.IDENT) { // Si después del tipo, hay un IDENT, es un método.
-				member = p.parseMethodDeclaration(false) // false indica que es un método regular
+
+			if p.peekTokenIs(token.IDENT) {
+				member = p.parseMethodDeclaration(false)
 			} else {
-				// Esto podría ser una expresión de función anónima (void(x){...})
-				// o un tipo de retorno sin un nombre de método, lo cual es un error en el cuerpo de la clase.
+
 				p.errors = append(p.errors, fmt.Sprintf("Declaración de método o expresión inesperada en el cuerpo de la clase: %s (%s)", p.currentToken.Type, p.currentToken.Literal))
-				p.nextToken() // Avanza para evitar bucle infinito
+				p.nextToken()
 				continue
 			}
 		} else if p.currentTokenIs(token.LET) {
-			// 3. Intentar parsear como Propiedad: let propertyName: Type = value;
 			member = p.parsePropertyDeclaration()
 		} else {
-			// Error o algo no reconocido en el cuerpo de la clase
 			p.errors = append(p.errors, fmt.Sprintf("Token inesperado en el cuerpo de la clase: %s (%s)", p.currentToken.Type, p.currentToken.Literal))
-			p.nextToken() // Avanza para evitar bucle infinito
+			p.nextToken()
 			continue
 		}
 
 		if member != nil {
 			block.Statements = append(block.Statements, member)
 		}
-		// Solo avanzamos el token si el statement no consumió el RBRACE o EOF
+
 		if !p.currentTokenIs(token.RBRACE) && !p.currentTokenIs(token.EOF) {
 			p.nextToken()
 		}
@@ -845,76 +736,71 @@ func (p *Parser) parseClassBody(className string) *ast.BlockStatement {
 	return block
 }
 
-// parseMethodDeclaration parsea un método o constructor dentro de una clase.
 func (p *Parser) parseMethodDeclaration(isConstructor bool) *ast.MethodDeclaration {
 	method := &ast.MethodDeclaration{Token: p.currentToken, IsConstructor: isConstructor}
 
 	if !isConstructor {
-		// currentToken es el tipo de retorno (VOID, TYPE_INT, etc.)
+
 		if !p.currentTokenIsType() {
 			p.errors = append(p.errors, fmt.Sprintf("Se esperaba un tipo de retorno para el método, pero se obtuvo %s (%s)", p.currentToken.Type, p.currentToken.Literal))
 			return nil
 		}
 		method.ReturnType = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-		if !p.expectPeek(token.IDENT) { // Espera el nombre del método
+		if !p.expectPeek(token.IDENT) {
 			return nil
 		}
 	} else {
-		// currentToken es el IDENT del constructor (nombre de la clase).
-		// No tiene tipo de retorno explícito en la sintaxis.
 		method.ReturnType = nil
 	}
 
 	method.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-	if !p.expectPeek(token.LPAREN) { // Espera '(' para los parámetros
+	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
 
-	method.Parameters = p.parseFunctionParameters() // Reutiliza la lógica de parámetros
+	method.Parameters = p.parseFunctionParameters()
 
-	if p.peekTokenIs(token.COLON) && !isConstructor { // Opcional: tipo de retorno explícito después de los paréntesis para métodos
-		p.nextToken() // Consume COLON
+	if p.peekTokenIs(token.COLON) && !isConstructor {
+		p.nextToken()
 		if !p.peekTokenIsType() {
 			p.peekError(token.IDENT)
 			return nil
 		}
-		p.nextToken() // Consume el token de tipo
+		p.nextToken()
 		method.ReturnType = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	}
 
-	if !p.expectPeek(token.LBRACE) { // Espera '{' para el cuerpo
+	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
 
-	method.Body = p.parseBlockStatement() // Reutiliza la lógica de bloque
+	method.Body = p.parseBlockStatement()
 
 	return method
 }
 
-// PropertyDeclaration representa una propiedad dentro de una clase.
 func (p *Parser) parsePropertyDeclaration() *ast.PropertyDeclaration {
-	prop := &ast.PropertyDeclaration{Token: p.currentToken} // currentToken es LET
+	prop := &ast.PropertyDeclaration{Token: p.currentToken}
 
-	if !p.expectPeek(token.IDENT) { // Espera el nombre de la propiedad
+	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
 	prop.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-	if p.peekTokenIs(token.COLON) { // Opcional: anotación de tipo
-		p.nextToken()             // Consume COLON
-		if !p.peekTokenIsType() { // Espera un token de tipo
-			p.peekError(token.IDENT) // Podría ser un IDENT que actúa como tipo (ej. nombre de clase)
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken()
+		if !p.peekTokenIsType() {
+			p.peekError(token.IDENT)
 			return nil
 		}
-		p.nextToken() // Consume el token de tipo
+		p.nextToken()
 		prop.TypeAnnotation = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	}
 
-	if p.peekTokenIs(token.ASSIGN) { // Propiedad con valor inicial
-		p.nextToken() // Consume ASSIGN
-		p.nextToken() // Avanza al inicio de la expresión de valor
+	if p.peekTokenIs(token.ASSIGN) {
+		p.nextToken()
 		prop.Value = p.parseExpression(LOWEST)
 	}
 
@@ -927,7 +813,6 @@ func (p *Parser) parsePropertyDeclaration() *ast.PropertyDeclaration {
 	return prop
 }
 
-// parseExpression parsea una expresión con el algoritmo de precedencia de operadores.
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFns[p.currentToken.Type]
 	if prefix == nil {
@@ -941,13 +826,12 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		if infix == nil {
 			return leftExp
 		}
-		p.nextToken() // Consume el operador infijo
+		p.nextToken()
 		leftExp = infix(leftExp)
 	}
 	return leftExp
 }
 
-// noPrefixParseFnError añade un error si no hay una función de parsing prefijo para el token actual.
 func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	msg := fmt.Sprintf("No se encontró una función de parsing prefijo para %s", t)
 	p.errors = append(p.errors, msg)
@@ -964,14 +848,14 @@ func (p *Parser) parseDotExpression(left ast.Expression) ast.Expression {
 
 func (p *Parser) parseNewExpression() ast.Expression {
 	exp := &ast.NewExpression{Token: p.currentToken}
-	if !p.expectPeek(token.IDENT) { // Espera el nombre de la clase
+	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
 	exp.Class = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
-	if !p.expectPeek(token.LPAREN) { // Espera '(' para los argumentos del constructor
+	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
-	exp.Arguments = p.parseCallArguments() // Reutiliza parseCallArguments
+	exp.Arguments = p.parseCallArguments()
 	return exp
 }
 

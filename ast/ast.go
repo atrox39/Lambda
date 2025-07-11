@@ -1,4 +1,3 @@
-// ast/ast.go
 package ast
 
 import (
@@ -7,25 +6,21 @@ import (
 	"github.com/atrox39/lambda/token"
 )
 
-// Node es la interfaz base para todos los nodos del AST.
 type Node interface {
-	TokenLiteral() string // Devuelve el literal del token asociado al nodo.
-	String() string       // Devuelve una representación en cadena del nodo (para depuración).
+	TokenLiteral() string
+	String() string
 }
 
-// Statement es la interfaz para las declaraciones (ej. let x = 5;).
 type Statement interface {
 	Node
-	statementNode() // Método marcador para diferenciar declaraciones.
+	statementNode()
 }
 
-// Expression es la interfaz para las expresiones (ej. 5 + 5; x * y;).
 type Expression interface {
 	Node
-	expressionNode() // Método marcador para diferenciar expresiones.
+	expressionNode()
 }
 
-// Program es el nodo raíz de cada AST.
 type Program struct {
 	Statements []Statement
 }
@@ -45,12 +40,11 @@ func (p *Program) String() string {
 	return out.String()
 }
 
-// LetStatement representa una declaración 'let' (ej. let x = 5; let y: int = 10;).
 type LetStatement struct {
-	Token          token.Token // El token LET
-	Name           *Identifier // El identificador (nombre de la variable)
-	TypeAnnotation *Identifier // Opcional: la anotación de tipo (ej. "int")
-	Value          Expression  // La expresión que produce el valor asignado
+	Token          token.Token
+	Name           *Identifier
+	TypeAnnotation *Identifier
+	Value          Expression
 }
 
 func (ls *LetStatement) statementNode()       {}
@@ -70,10 +64,9 @@ func (ls *LetStatement) String() string {
 	return out.String()
 }
 
-// ReturnStatement representa una declaración 'return' (ej. return 10;).
 type ReturnStatement struct {
-	Token       token.Token // El token RETURN
-	ReturnValue Expression  // El valor a retornar
+	Token       token.Token
+	ReturnValue Expression
 }
 
 func (rs *ReturnStatement) statementNode()       {}
@@ -88,10 +81,9 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
-// ExpressionStatement representa una expresión usada como declaración (ej. x + y;).
 type ExpressionStatement struct {
-	Token      token.Token // El primer token de la expresión
-	Expression Expression  // La expresión
+	Token      token.Token
+	Expression Expression
 }
 
 func (es *ExpressionStatement) statementNode()       {}
@@ -103,41 +95,37 @@ func (es *ExpressionStatement) String() string {
 	return ""
 }
 
-// Identifier representa un identificador (ej. x, miVariable, funcionPrincipal).
 type Identifier struct {
-	Token token.Token // El token IDENT
-	Value string      // El valor del identificador
+	Token token.Token
+	Value string
 }
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
 func (i *Identifier) String() string       { return i.Value }
 
-// IntegerLiteral representa un literal entero (ej. 5, 100).
 type IntegerLiteral struct {
-	Token token.Token // El token INT
-	Value int64       // El valor entero
+	Token token.Token
+	Value int64
 }
 
 func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 func (il *IntegerLiteral) String() string       { return il.Token.Literal }
 
-// StringLiteral representa un literal de cadena (ej. "hola mundo").
 type StringLiteral struct {
-	Token token.Token // El token STRING
-	Value string      // El valor de la cadena
+	Token token.Token
+	Value string
 }
 
 func (sl *StringLiteral) expressionNode()      {}
 func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
 func (sl *StringLiteral) String() string       { return sl.Token.Literal }
 
-// PrefixExpression representa una expresión prefijo (ej. !true, -5).
 type PrefixExpression struct {
-	Token    token.Token // El token del operador prefijo (ej. BANG, MINUS)
-	Operator string      // El operador (ej. "!", "-")
-	Right    Expression  // La expresión a la derecha del operador
+	Token    token.Token
+	Operator string
+	Right    Expression
 }
 
 func (pe *PrefixExpression) expressionNode()      {}
@@ -152,12 +140,11 @@ func (pe *PrefixExpression) String() string {
 	return out.String()
 }
 
-// InfixExpression representa una expresión infijo (ej. 5 + 5, x == y).
 type InfixExpression struct {
-	Token    token.Token // El token del operador infijo (ej. PLUS, EQ)
-	Left     Expression  // La expresión a la izquierda del operador
-	Operator string      // El operador (ej. "+", "==")
-	Right    Expression  // La expresión a la derecha del operador
+	Token    token.Token
+	Left     Expression
+	Operator string
+	Right    Expression
 }
 
 func (ie *InfixExpression) expressionNode()      {}
@@ -168,11 +155,10 @@ func (ie *InfixExpression) String() string {
 	return out.String()
 }
 
-// AssignmentExpression representa una asignación (ej. x = 5; this.prop = val;).
 type AssignmentExpression struct {
-	Token token.Token // El ASSIGN token
-	Left  Expression  // La expresión siendo asignada a (ej. Identifier, DotExpression, IndexExpression)
-	Value Expression  // El valor siendo asignado
+	Token token.Token
+	Left  Expression
+	Value Expression
 }
 
 func (ae *AssignmentExpression) expressionNode()      {}
@@ -183,44 +169,41 @@ func (ae *AssignmentExpression) String() string {
 	return out.String()
 }
 
-// Boolean representa un literal booleano (true/false).
 type Boolean struct {
-	Token token.Token // El token TRUE o FALSE
-	Value bool        // El valor booleano
+	Token token.Token
+	Value bool
 }
 
 func (b *Boolean) expressionNode()      {}
 func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
 func (b *Boolean) String() string       { return b.Token.Literal }
 
-// Parameter representa un parámetro de función o método con su tipo.
 type Parameter struct {
-	Name           *Identifier // El nombre del parámetro
-	TypeAnnotation *Identifier // La anotación de tipo del parámetro
+	Name           *Identifier
+	TypeAnnotation *Identifier
 }
 
 func (p *Parameter) String() string {
 	var out strings.Builder
-	out.WriteString(p.Name.String()) // Nombre del parámetro
+	out.WriteString(p.Name.String())
 	if p.TypeAnnotation != nil {
-		out.WriteString(": " + p.TypeAnnotation.String()) // Anotación de tipo
+		out.WriteString(": " + p.TypeAnnotation.String())
 	}
 	return out.String()
 }
 
-// FunctionLiteral representa una expresión de función (ej. void(int x, string y) { ... }).
 type FunctionLiteral struct {
-	Token      token.Token     // El token VOID (que también es el tipo de retorno)
-	ReturnType *Identifier     // El tipo de retorno explícito (ej. "void", "int")
-	Parameters []*Parameter    // Los parámetros de la función con sus tipos
-	Body       *BlockStatement // El cuerpo de la función
+	Token      token.Token
+	ReturnType *Identifier
+	Parameters []*Parameter
+	Body       *BlockStatement
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
 func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token.Literal }
 func (fl *FunctionLiteral) String() string {
 	var out strings.Builder
-	out.WriteString(fl.TokenLiteral()) // "void"
+	out.WriteString(fl.TokenLiteral())
 	out.WriteString("(")
 	params := []string{}
 	for _, p := range fl.Parameters {
@@ -229,7 +212,7 @@ func (fl *FunctionLiteral) String() string {
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(")")
 	if fl.ReturnType != nil {
-		out.WriteString(": " + fl.ReturnType.String()) // Tipo de retorno
+		out.WriteString(": " + fl.ReturnType.String())
 	}
 	if fl.Body != nil {
 		out.WriteString(fl.Body.String())
@@ -237,13 +220,12 @@ func (fl *FunctionLiteral) String() string {
 	return out.String()
 }
 
-// FunctionDeclaration representa una declaración de función (e.g., void funcName(int a, string b): int { ... }).
 type FunctionDeclaration struct {
-	Token      token.Token     // El VOID token (o el token del tipo de retorno)
-	ReturnType *Identifier     // El tipo de retorno explícito (ej. "void", "int")
-	Name       *Identifier     // El nombre de la función
-	Parameters []*Parameter    // Los parámetros de la función con sus tipos
-	Body       *BlockStatement // El cuerpo de la función
+	Token      token.Token
+	ReturnType *Identifier
+	Name       *Identifier
+	Parameters []*Parameter
+	Body       *BlockStatement
 }
 
 func (fd *FunctionDeclaration) statementNode()       {}
@@ -260,7 +242,7 @@ func (fd *FunctionDeclaration) String() string {
 	}
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(")")
-	if fd.ReturnType != nil { // Vuelve a añadir el tipo de retorno después de los paréntesis
+	if fd.ReturnType != nil {
 		out.WriteString(": " + fd.ReturnType.String())
 	}
 	if fd.Body != nil {
@@ -269,11 +251,10 @@ func (fd *FunctionDeclaration) String() string {
 	return out.String()
 }
 
-// CallExpression representa una llamada a función (ej. add(2, 3)).
 type CallExpression struct {
-	Token     token.Token  // El paréntesis izquierdo LPAREN
-	Function  Expression   // El identificador o literal de función
-	Arguments []Expression // Los argumentos de la llamada
+	Token     token.Token
+	Function  Expression
+	Arguments []Expression
 }
 
 func (ce *CallExpression) expressionNode()      {}
@@ -291,11 +272,9 @@ func (ce *CallExpression) String() string {
 	return out.String()
 }
 
-// BlockStatement representa un bloque de código (ej. { ... }).
-// También se usará para el cuerpo de la clase.
 type BlockStatement struct {
-	Token      token.Token // El token LBRACE
-	Statements []Statement // Las declaraciones dentro del bloque
+	Token      token.Token
+	Statements []Statement
 }
 
 func (bs *BlockStatement) statementNode()       {}
@@ -310,12 +289,11 @@ func (bs *BlockStatement) String() string {
 	return out.String()
 }
 
-// IfExpression representa una expresión 'if' (ej. if (x > 0) { ... } else { ... }).
 type IfExpression struct {
-	Token       token.Token     // El token IF
-	Condition   Expression      // La condición (expresión booleana)
-	Consequence *BlockStatement // El bloque de código si la condición es verdadera
-	Alternative *BlockStatement // El bloque de código si la condición es falsa (opcional)
+	Token       token.Token
+	Condition   Expression
+	Consequence *BlockStatement
+	Alternative *BlockStatement
 }
 
 func (ie *IfExpression) expressionNode()      {}
@@ -330,10 +308,9 @@ func (ie *IfExpression) String() string {
 	return out.String()
 }
 
-// LogStatement representa una declaración 'log' (ej. log("hola");).
 type LogStatement struct {
-	Token    token.Token // El token LOG
-	Argument Expression  // El argumento a imprimir
+	Token    token.Token
+	Argument Expression
 }
 
 func (ls *LogStatement) statementNode()       {}
@@ -348,10 +325,9 @@ func (ls *LogStatement) String() string {
 	return out.String()
 }
 
-// ArrayLiteral representa un literal de array (ej. [1, 2, "hola"]).
 type ArrayLiteral struct {
-	Token    token.Token  // El token LBRACKET
-	Elements []Expression // Los elementos del array
+	Token    token.Token
+	Elements []Expression
 }
 
 func (al *ArrayLiteral) expressionNode()      {}
@@ -368,11 +344,10 @@ func (al *ArrayLiteral) String() string {
 	return out.String()
 }
 
-// IndexExpression representa una expresión de índice (ej. miArray[0]).
 type IndexExpression struct {
-	Token token.Token // El token LBRACKET
-	Left  Expression  // La expresión del array/objeto
-	Index Expression  // La expresión del índice
+	Token token.Token
+	Left  Expression
+	Index Expression
 }
 
 func (ie *IndexExpression) expressionNode()      {}
@@ -383,11 +358,10 @@ func (ie *IndexExpression) String() string {
 	return out.String()
 }
 
-// DotExpression representa una expresión de acceso a miembro (ej. objeto.propiedad, objeto.metodo()).
 type DotExpression struct {
-	Token  token.Token // El token DOT
-	Left   Expression  // La expresión del objeto/instancia
-	Member *Identifier // El identificador del miembro (propiedad o método)
+	Token  token.Token
+	Left   Expression
+	Member *Identifier
 }
 
 func (de *DotExpression) expressionNode()      {}
@@ -398,11 +372,10 @@ func (de *DotExpression) String() string {
 	return out.String()
 }
 
-// ModuleStatement representa una declaración 'module' (ej. module let x = 10;).
 type ModuleStatement struct {
-	Token token.Token // El token MODULE
-	Name  *Identifier // El identificador (nombre del módulo/exportación si aplica)
-	Value Statement   // La declaración que se está exportando (LetStatement, FunctionDeclaration, ClassStatement, etc.)
+	Token token.Token
+	Name  *Identifier
+	Value Statement
 }
 
 func (ms *ModuleStatement) statementNode()       {}
@@ -419,14 +392,11 @@ func (ms *ModuleStatement) String() string {
 	return out.String()
 }
 
-// --- Nuevos Nodos AST para Clases ---
-
-// ClassStatement representa una declaración de clase.
 type ClassStatement struct {
-	Token      token.Token     // El CLASS token
-	Name       *Identifier     // El nombre de la clase
-	SuperClass *Identifier     // Opcional: El nombre de la superclase si 'extends' es usado
-	Body       *BlockStatement // El cuerpo de la clase, conteniendo PropertyDeclaration y MethodDeclaration
+	Token      token.Token
+	Name       *Identifier
+	SuperClass *Identifier
+	Body       *BlockStatement
 }
 
 func (cs *ClassStatement) statementNode()       {}
@@ -437,23 +407,22 @@ func (cs *ClassStatement) String() string {
 	if cs.SuperClass != nil {
 		out.WriteString(" extends " + cs.SuperClass.String())
 	}
-	out.WriteString(" ") // Espacio antes del cuerpo
-	if cs.Body != nil {   // El cuerpo es un BlockStatement que ya incluye { }
+	out.WriteString(" ")
+	if cs.Body != nil {
 		out.WriteString(cs.Body.String())
 	} else {
-		out.WriteString("{}") // Si el cuerpo está vacío
+		out.WriteString("{}")
 	}
 	return out.String()
 }
 
-// PropertyDeclaration representa una propiedad dentro de una clase.
 type PropertyDeclaration struct {
-	Token          token.Token // El token del modificador (PUBLIC, PRIVATE, PROTECTED) o LET si es implícito público
-	Modifier       token.Token // Guardamos el token del modificador explícito
-	IsStatic       bool        // Nuevo: true si la propiedad es estática
-	Name           *Identifier // El nombre de la propiedad
-	TypeAnnotation *Identifier // Opcional: la anotación de tipo (ej. "int")
-	Value          Expression  // Opcional: El valor inicial de la propiedad
+	Token          token.Token
+	Modifier       token.Token
+	IsStatic       bool
+	Name           *Identifier
+	TypeAnnotation *Identifier
+	Value          Expression
 }
 
 func (pd *PropertyDeclaration) statementNode()       {}
@@ -466,13 +435,6 @@ func (pd *PropertyDeclaration) String() string {
 	if pd.IsStatic {
 		out.WriteString("static ")
 	}
-	// Si es público implícito (Modifier no es P/P/P y Token original era LET), no se imprime "let"
-    // Esta lógica de impresión de "let" es compleja si Modifier puede ser LET.
-    // Asumimos que si Modifier es LET, es porque no hubo public/private/protected explícito.
-    // Y si es LET y no es estático, es una propiedad de instancia pública implícita.
-    // Si es LET y ESTÁTICO, la sintaxis sería "static let", lo cual es redundante si static implica let.
-    // Por ahora, si `IsStatic` es true, imprimimos "static". Si hay Modifier explícito, se imprime.
-    // El "let" implícito para propiedades de instancia no estáticas no se imprime.
 
 	out.WriteString(pd.Name.String())
 	if pd.TypeAnnotation != nil {
@@ -485,16 +447,15 @@ func (pd *PropertyDeclaration) String() string {
 	return out.String()
 }
 
-// MethodDeclaration representa un método dentro de una clase.
 type MethodDeclaration struct {
-	Token         token.Token     // El token del modificador (PUBLIC, PRIVATE, PROTECTED) o el tipo de retorno si es implícito público
-	Modifier      token.Token     // Guardamos el token del modificador explícito
-	IsStatic      bool            // Nuevo: true si el método es estático
-	ReturnType    *Identifier     // El tipo de retorno explícito (ej. "void", "int")
-	Name          *Identifier     // El nombre del método (o clase para constructor)
-	Parameters    []*Parameter    // Los parámetros del método
-	Body          *BlockStatement // El cuerpo del método
-	IsConstructor bool            // True si este método es el constructor
+	Token         token.Token
+	Modifier      token.Token
+	IsStatic      bool
+	ReturnType    *Identifier
+	Name          *Identifier
+	Parameters    []*Parameter
+	Body          *BlockStatement
+	IsConstructor bool
 }
 
 func (md *MethodDeclaration) statementNode()       {}
@@ -519,22 +480,18 @@ func (md *MethodDeclaration) String() string {
 	}
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(")")
-	// El tipo de retorno para constructores no se imprime.
-	// Para métodos, si hay un tipo de retorno explícito después de los parámetros (como en TypeScript), se añadiría aquí.
-	// Por ahora, el diseño lo pone antes del nombre del método.
-	if md.Body != nil { // El cuerpo es un BlockStatement que ya incluye { }
+	if md.Body != nil {
 		out.WriteString(" " + md.Body.String())
 	} else {
-		out.WriteString(" {}") // Si el cuerpo está vacío (no debería pasar para métodos bien formados)
+		out.WriteString(" {}")
 	}
 	return out.String()
 }
 
-// NewExpression representa una expresión 'new' (ej. new ClassName(args)).
 type NewExpression struct {
-	Token     token.Token  // El token NEW
-	Class     *Identifier  // El identificador de la clase
-	Arguments []Expression // Los argumentos del constructor
+	Token     token.Token
+	Class     *Identifier
+	Arguments []Expression
 }
 
 func (ne *NewExpression) expressionNode()      {}
@@ -551,12 +508,8 @@ func (ne *NewExpression) String() string {
 	return out.String()
 }
 
-// ThisExpression representa la palabra clave 'this'.
-// Será parseado como un Identifier con valor "this", pero podemos tener un nodo específico si es necesario
-// por ahora, lo manejaremos como un Identifier especial en el evaluador.
-// Para mantener la consistencia con el diseño, lo añadimos aunque el parser lo genere como Identifier.
 type ThisExpression struct {
-	Token token.Token // El token THIS
+	Token token.Token
 }
 
 func (te *ThisExpression) expressionNode()      {}

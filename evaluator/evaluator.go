@@ -1,4 +1,3 @@
-// evaluator/evaluator.go
 package evaluator
 
 import (
@@ -6,7 +5,6 @@ import (
 
 	"github.com/atrox39/lambda/ast"
 	"github.com/atrox39/lambda/object"
-	
 )
 
 var (
@@ -25,16 +23,22 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalBlockStatement(node, env)
 	case *ast.ReturnStatement:
 		val := Eval(node.ReturnValue, env)
-		if isError(val) { return val }
+		if isError(val) {
+			return val
+		}
 		return &object.ReturnValue{Value: val}
 	case *ast.LetStatement:
 		val := Eval(node.Value, env)
-		if isError(val) { return val }
+		if isError(val) {
+			return val
+		}
 		env.Set(node.Name.Value, val)
 		return nil
 	case *ast.LogStatement:
 		val := Eval(node.Argument, env)
-		if isError(val) { return val }
+		if isError(val) {
+			return val
+		}
 		fmt.Println(val.Inspect())
 		return nil
 
@@ -49,13 +53,19 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return nativeBoolToBooleanObject(node.Value)
 	case *ast.PrefixExpression:
 		right := Eval(node.Right, env)
-		if isError(right) { return right }
+		if isError(right) {
+			return right
+		}
 		return evalPrefixExpression(node.Operator, right)
 	case *ast.InfixExpression:
 		left := Eval(node.Left, env)
-		if isError(left) { return left }
+		if isError(left) {
+			return left
+		}
 		right := Eval(node.Right, env)
-		if isError(right) { return right }
+		if isError(right) {
+			return right
+		}
 		return evalInfixExpression(node.Operator, left, right)
 	case *ast.IfExpression:
 		return evalIfExpression(node, env)
@@ -67,19 +77,29 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.Function{Parameters: params, Env: env, Body: body, Name: "", IsStatic: false}
 	case *ast.CallExpression:
 		function := Eval(node.Function, env)
-		if isError(function) { return function }
+		if isError(function) {
+			return function
+		}
 		args := evalExpressions(node.Arguments, env)
-		if len(args) == 1 && isError(args[0]) { return args[0] }
+		if len(args) == 1 && isError(args[0]) {
+			return args[0]
+		}
 		return applyFunction(function, args, env)
 	case *ast.ArrayLiteral:
 		elements := evalExpressions(node.Elements, env)
-		if len(elements) == 1 && isError(elements[0]) { return elements[0] }
+		if len(elements) == 1 && isError(elements[0]) {
+			return elements[0]
+		}
 		return &object.Array{Elements: elements}
 	case *ast.IndexExpression:
 		left := Eval(node.Left, env)
-		if isError(left) { return left }
+		if isError(left) {
+			return left
+		}
 		index := Eval(node.Index, env)
-		if isError(index) { return index }
+		if isError(index) {
+			return index
+		}
 		return evalIndexExpression(left, index)
 	case *ast.NewExpression:
 		return evalNewExpression(node, env)
@@ -154,7 +174,9 @@ func evalClassStatement(node *ast.ClassStatement, env *object.Environment) objec
 				if memberNode.IsStatic {
 					if memberNode.Value != nil {
 						val := Eval(memberNode.Value, classObj.StaticEnv)
-						if isError(val) { return val }
+						if isError(val) {
+							return val
+						}
 						classObj.StaticEnv.Set(propDef.Name, val)
 					} else {
 						classObj.StaticEnv.Set(propDef.Name, NULL)
@@ -318,7 +340,9 @@ func evalThisExpression(node *ast.ThisExpression, env *object.Environment) objec
 
 func evalAssignmentExpression(node *ast.AssignmentExpression, env *object.Environment) object.Object {
 	val := Eval(node.Value, env)
-	if isError(val) { return val }
+	if isError(val) {
+		return val
+	}
 
 	switch leftNode := node.Left.(type) {
 	case *ast.Identifier:
@@ -327,7 +351,9 @@ func evalAssignmentExpression(node *ast.AssignmentExpression, env *object.Enviro
 
 	case *ast.DotExpression:
 		objLeft := Eval(leftNode.Left, env)
-		if isError(objLeft) { return objLeft }
+		if isError(objLeft) {
+			return objLeft
+		}
 
 		memberName := leftNode.Member.Value
 
@@ -378,24 +404,32 @@ func applyFunction(fnObj object.Object, args []object.Object, callerEnv *object.
 	}
 }
 
-// --- Funciones helper estándar (sin cambios) ---
 func nativeBoolToBooleanObject(input bool) *object.Boolean {
-	if input { return TRUE	}
+	if input {
+		return TRUE
+	}
 	return FALSE
 }
 func evalPrefixExpression(operator string, right object.Object) object.Object {
 	switch operator {
-	case "!": return evalBangOperatorExpression(right)
-	case "-": return evalMinusPrefixOperatorExpression(right)
-	default: return newError("Operador prefijo desconocido: %s%s", operator, right.Type())
+	case "!":
+		return evalBangOperatorExpression(right)
+	case "-":
+		return evalMinusPrefixOperatorExpression(right)
+	default:
+		return newError("Operador prefijo desconocido: %s%s", operator, right.Type())
 	}
 }
 func evalBangOperatorExpression(right object.Object) object.Object {
 	switch right {
-	case TRUE: return FALSE
-	case FALSE: return TRUE
-	case NULL: return TRUE
-	default: return FALSE
+	case TRUE:
+		return FALSE
+	case FALSE:
+		return TRUE
+	case NULL:
+		return TRUE
+	default:
+		return FALSE
 	}
 }
 func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
@@ -425,17 +459,27 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 	leftVal := left.(*object.Integer).Value
 	rightVal := right.(*object.Integer).Value
 	switch operator {
-	case "+": return &object.Integer{Value: leftVal + rightVal}
-	case "-": return &object.Integer{Value: leftVal - rightVal}
-	case "*": return &object.Integer{Value: leftVal * rightVal}
+	case "+":
+		return &object.Integer{Value: leftVal + rightVal}
+	case "-":
+		return &object.Integer{Value: leftVal - rightVal}
+	case "*":
+		return &object.Integer{Value: leftVal * rightVal}
 	case "/":
-		if rightVal == 0 { return newError("División por cero.") }
+		if rightVal == 0 {
+			return newError("División por cero.")
+		}
 		return &object.Integer{Value: leftVal / rightVal}
-	case "<": return nativeBoolToBooleanObject(leftVal < rightVal)
-	case ">": return nativeBoolToBooleanObject(leftVal > rightVal)
-	case "==": return nativeBoolToBooleanObject(leftVal == rightVal)
-	case "!=": return nativeBoolToBooleanObject(leftVal != rightVal)
-	default: return newError("Operador entero desconocido: %s %s %s", left.Type(), operator, right.Type())
+	case "<":
+		return nativeBoolToBooleanObject(leftVal < rightVal)
+	case ">":
+		return nativeBoolToBooleanObject(leftVal > rightVal)
+	case "==":
+		return nativeBoolToBooleanObject(leftVal == rightVal)
+	case "!=":
+		return nativeBoolToBooleanObject(leftVal != rightVal)
+	default:
+		return newError("Operador entero desconocido: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 func evalStringInfixExpression(operator string, left, right object.Object) object.Object {
@@ -448,7 +492,9 @@ func evalStringInfixExpression(operator string, left, right object.Object) objec
 }
 func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
 	condition := Eval(ie.Condition, env)
-	if isError(condition) { return condition }
+	if isError(condition) {
+		return condition
+	}
 	if isTruthy(condition) {
 		return Eval(ie.Consequence, env)
 	} else if ie.Alternative != nil {
@@ -461,7 +507,9 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 	var result []object.Object
 	for _, e := range exps {
 		evaluated := Eval(e, env)
-		if isError(evaluated) { return []object.Object{evaluated} }
+		if isError(evaluated) {
+			return []object.Object{evaluated}
+		}
 		result = append(result, evaluated)
 	}
 	return result
@@ -477,21 +525,28 @@ func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Enviro
 	return env
 }
 func unwrapReturnValue(obj object.Object) object.Object {
-	if returnValue, ok := obj.(*object.ReturnValue); ok { return returnValue.Value }
+	if returnValue, ok := obj.(*object.ReturnValue); ok {
+		return returnValue.Value
+	}
 	return obj
 }
 func newError(format string, a ...interface{}) *object.Error {
 	return &object.Error{Message: fmt.Sprintf(format, a...)}
 }
 func isError(obj object.Object) bool {
-	if obj != nil { return obj.Type() == object.ERROR_OBJ }
+	if obj != nil {
+		return obj.Type() == object.ERROR_OBJ
+	}
 	return false
 }
 func isTruthy(obj object.Object) bool {
 	switch obj {
-	case NULL: return false
-	case TRUE: return true
-	case FALSE: return false
+	case NULL:
+		return false
+	case TRUE:
+		return true
+	case FALSE:
+		return false
 	default:
 		return true
 	}
@@ -508,7 +563,9 @@ func evalArrayIndexExpression(array, index object.Object) object.Object {
 	arrayObject := array.(*object.Array)
 	idx := index.(*object.Integer).Value
 	max := int64(len(arrayObject.Elements) - 1)
-	if idx < 0 || idx > max { return NULL	}
+	if idx < 0 || idx > max {
+		return NULL
+	}
 	return arrayObject.Elements[idx]
 }
 
@@ -529,4 +586,3 @@ var builtins = map[string]*object.Builtin{
 		},
 	},
 }
-

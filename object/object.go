@@ -1,4 +1,3 @@
-// object/object.go
 package object
 
 import (
@@ -7,13 +6,12 @@ import (
 	"strings"
 
 	"github.com/atrox39/lambda/ast"
-	"github.com/atrox39/lambda/token" // Necesario para AccessModifier
+	"github.com/atrox39/lambda/token"
 )
 
 type ObjectType string
-type AccessModifier int // Nuevo tipo para modificadores de acceso
+type AccessModifier int
 
-// Constantes para Modificadores de Acceso
 const (
 	Public AccessModifier = iota
 	Private
@@ -30,9 +28,9 @@ const (
 	STRING_OBJ       = "STRING"
 	BUILTIN_OBJ      = "BUILTIN"
 	ARRAY_OBJ        = "ARRAY"
-	CLASS_OBJ        = "CLASS"   // Nuevo tipo de objeto para Clases
-	INSTANCE_OBJ     = "INSTANCE" // Nuevo tipo de objeto para Instancias de Clases
-	BOUND_METHOD_OBJ = "BOUND_METHOD" // Nuevo
+	CLASS_OBJ        = "CLASS"
+	INSTANCE_OBJ     = "INSTANCE"
+	BOUND_METHOD_OBJ = "BOUND_METHOD"
 )
 
 type Object interface {
@@ -76,9 +74,6 @@ func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
 type Environment struct {
 	store map[string]Object
 	outer *Environment
-	// Podríamos añadir aquí una referencia a la instancia actual para `this`,
-	// o pasar `this` explícitamente durante la evaluación de métodos.
-	// Por ahora, el evaluador manejará `this`.
 }
 
 func NewEnvironment() *Environment {
@@ -105,13 +100,12 @@ func (e *Environment) Set(name string, val Object) Object {
 	return val
 }
 
-// Function representa una función definida por el usuario o un método.
 type Function struct {
 	Parameters []*ast.Parameter
 	Body       *ast.BlockStatement
-	Env        *Environment // Entorno donde la función/método fue definida
-	Name       string // Nombre de la función/método para debugging o referencia
-	IsStatic   bool   // Nuevo: Indica si es un método estático
+	Env        *Environment
+	Name       string
+	IsStatic   bool
 }
 
 func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
@@ -120,7 +114,7 @@ func (f *Function) Inspect() string {
 	if f.IsStatic {
 		out.WriteString("static ")
 	}
-out.WriteString("fn ")
+	out.WriteString("fn ")
 	if f.Name != "" {
 		out.WriteString(f.Name)
 	}
@@ -133,7 +127,7 @@ out.WriteString("fn ")
 	out.WriteString("(")
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(") {\n")
-	if f.Body != nil { // El cuerpo puede ser nil para builtins o interfaces futuras
+	if f.Body != nil {
 		out.WriteString(f.Body.String())
 	}
 	out.WriteString("\n}")
@@ -147,8 +141,7 @@ type String struct {
 func (s *String) Type() ObjectType { return STRING_OBJ }
 func (s *String) Inspect() string  { return s.Value }
 
-type BuiltinFunction func(env *Environment, args ...Object) Object // Modificado para pasar el entorno actual
-
+type BuiltinFunction func(env *Environment, args ...Object) Object
 type Builtin struct {
 	Fn BuiltinFunction
 }
@@ -173,38 +166,31 @@ func (ao *Array) Inspect() string {
 	return out.String()
 }
 
-// --- Nuevos Objetos para Clases ---
-
-// ClassProperty define una propiedad de una clase.
 type ClassProperty struct {
 	Name           string
 	DefaultValue   ast.Expression
 	TypeAnnotation *ast.Identifier
 	Modifier       AccessModifier
-	IsStatic       bool // Ya estaba en el AST, útil aquí también para la definición.
+	IsStatic       bool
 }
 
-// ClassMethod define un método de una clase (tanto instancia como estático en su definición).
 type ClassMethod struct {
 	Name          string
 	Function      *Function
 	Modifier      AccessModifier
 	IsConstructor bool
-	IsStatic      bool // Ya estaba en el AST.
+	IsStatic      bool
 }
 
-// Class representa la definición de una clase en tiempo de ejecución.
 type Class struct {
 	Name            *ast.Identifier
-	InstanceMethods map[string]*ClassMethod   // Métodos de instancia
-	InstanceProps   map[string]*ClassProperty // Definiciones de propiedades de instancia
+	InstanceMethods map[string]*ClassMethod
+	InstanceProps   map[string]*ClassProperty
 
-	StaticEnv       *Environment              // Nuevo: Almacena valores de props estáticas y Funciones de métodos estáticos
-	                                          // Los métodos estáticos (object.Function) tendrán este StaticEnv como su f.Env.
-	                                          // Las propiedades estáticas (object.Object) se almacenarán directamente aquí.
+	StaticEnv *Environment
 
-	SuperClass      *Class
-	DefinitionEnv   *Environment              // Entorno donde la 'class Foo {}' fue declarada (para closure de la clase)
+	SuperClass    *Class
+	DefinitionEnv *Environment
 }
 
 func (c *Class) Type() ObjectType { return CLASS_OBJ }
@@ -212,37 +198,31 @@ func (c *Class) Inspect() string {
 	var out bytes.Buffer
 	out.WriteString("class ")
 	out.WriteString(c.Name.Value)
-	out.WriteString(" { ... }") // Podríamos añadir más detalles si es necesario
+	out.WriteString(" { ... }")
 	return out.String()
 }
 
-// Instance representa una instancia de una clase.
 type Instance struct {
-	Class *Class       // La clase de la cual esta es una instancia
-	Env   *Environment // Entorno para las propiedades de esta instancia específica
+	Class *Class
+	Env   *Environment
 }
 
 func (i *Instance) Type() ObjectType { return INSTANCE_OBJ }
 func (i *Instance) Inspect() string {
-	// Podríamos intentar mostrar las propiedades, pero puede ser complejo/verboso.
-	// Por ahora, solo el nombre de la clase.
 	return fmt.Sprintf("%s instance", i.Class.Name.Value)
 }
 
-// BoundMethod representa un método que ha sido vinculado a una instancia específica ('this').
 type BoundMethod struct {
-	Method   *Function    // La definición original de la función del método
-	Env      *Environment // El entorno para ejecutar el método (contiene 'this' y está enlazado al entorno de la clase)
-	Instance *Instance    // La instancia a la que está vinculado este método
+	Method   *Function
+	Env      *Environment
+	Instance *Instance
 }
 
 func (bm *BoundMethod) Type() ObjectType { return BOUND_METHOD_OBJ }
 func (bm *BoundMethod) Inspect() string {
-	// Podríamos mostrar bm.Instance.Class.Name.Value + "." + bm.Method.Name
 	return fmt.Sprintf("method[%s.%s]", bm.Instance.Class.Name.Value, bm.Method.Name)
 }
 
-// Helper para convertir token.TokenType a AccessModifier
 func ModifierFromToken(tok token.Token) AccessModifier {
 	switch tok.Type {
 	case token.PRIVATE:
@@ -251,7 +231,7 @@ func ModifierFromToken(tok token.Token) AccessModifier {
 		return Protected
 	case token.PUBLIC:
 		return Public
-	default: // Si es LET o un tipo (para métodos implícitamente públicos)
-		return Public // Por defecto es público
+	default:
+		return Public
 	}
 }
