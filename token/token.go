@@ -26,8 +26,14 @@ const (
 	EXTENDS TokenType = "EXTENDS" // para 'extends'
 	MODULE  TokenType = "MODULE"  // para 'module' (nueva palabra clave)
 	LOG     TokenType = "LOG"     // para 'log'
+	STATIC  TokenType = "STATIC"  // Nueva palabra clave para miembros estáticos
 
-	// Tipos de datos (nuevos tokens)
+	// Modificadores de acceso (existentes)
+	PUBLIC    TokenType = "PUBLIC"
+	PRIVATE   TokenType = "PRIVATE"
+	PROTECTED TokenType = "PROTECTED"
+
+	// Tipos de datos (existentes, verificar si se usan consistentemente)
 	TYPE_INT     TokenType = "TYPE_INT"     // para 'int'
 	TYPE_STRING  TokenType = "TYPE_STRING"  // para 'string'
 	TYPE_BOOLEAN TokenType = "TYPE_BOOLEAN" // para 'boolean'
@@ -56,7 +62,7 @@ const (
 	LBRACKET  TokenType = "[" // Corchete izquierdo
 	RBRACKET  TokenType = "]" // Corchete derecho
 	DOT       TokenType = "." // Punto para acceso a miembros
-	COLON     TokenType = ":" // Dos puntos para anotaciones de tipo (nuevo token)
+	COLON     TokenType = ":" // Dos puntos para anotaciones de tipo
 
 	// Tipos literales
 	IDENT  TokenType = "IDENT"  // Identificadores (nombres de variables, funciones, clases)
@@ -83,10 +89,14 @@ var keywords = map[string]TokenType{
 	"extends": EXTENDS,
 	"module":  MODULE,
 	"log":     LOG,
-	"int":     TYPE_INT,     // Nuevo tipo
-	"string":  TYPE_STRING,  // Nuevo tipo
-	"boolean": TYPE_BOOLEAN, // Nuevo tipo
-	"any":     TYPE_ANY,     // Nuevo tipo
+	"static":    STATIC,    // Nuevo
+	"int":     TYPE_INT,
+	"string":  TYPE_STRING,
+	"boolean": TYPE_BOOLEAN,
+	"any":     TYPE_ANY,
+	"public":    PUBLIC,
+	"private":   PRIVATE,
+	"protected": PROTECTED,
 }
 
 // LookupIdent determina si un identificador es una palabra clave o un IDENT.

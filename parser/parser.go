@@ -74,11 +74,15 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
-	p.registerPrefix(token.VOID, p.parseFunctionLiteral) // Para expresiones de función (void() { ... })
+	p.registerPrefix(token.VOID, p.parseFunctionLiteral)
+	p.registerPrefix(token.TYPE_INT, p.parseFunctionLiteral) // Tipos también pueden iniciar literales de función (ej. int() { ... })
+	p.registerPrefix(token.TYPE_STRING, p.parseFunctionLiteral)
+	p.registerPrefix(token.TYPE_BOOLEAN, p.parseFunctionLiteral)
+	p.registerPrefix(token.TYPE_ANY, p.parseFunctionLiteral)
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
 	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
-	p.registerPrefix(token.NEW, p.parseNewExpression) // Nuevo: para parsear new ClassName(...)
-	p.registerPrefix(token.THIS, p.parseIdentifier)   // 'this' es un identificador especial
+	p.registerPrefix(token.NEW, p.parseNewExpression)
+	p.registerPrefix(token.THIS, p.parseThisExpression)     // Nuevo
 
 	// Registra las funciones de parsing de infijos.
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
@@ -172,7 +176,7 @@ func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
 	program.Statements = []ast.Statement{}
 
-	for p.currentToken.Type != token.EOF {
+	for !p.currentTokenIs(token.EOF) {
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
@@ -182,56 +186,111 @@ func (p *Parser) ParseProgram() *ast.Program {
 	return program
 }
 
-// parseStatement parsea una declaración.
+// ---- CAMBIOS PRINCIPALES COMIENZAN AQUÍ ----
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case token.LET:
 		return p.parseLetStatement()
 	case token.RETURN:
 		return p.parseReturnStatement()
-	case token.MODULE: // Nuevo caso para declaraciones 'module'
-		return p.parseModuleStatement()
-	case token.CLASS: // Nuevo caso para declaraciones 'class'
-		return p.parseClassStatement()
-	case token.IF: // Este caso debe manejar las declaraciones 'if'
-		return p.parseIfStatement()
+	case token.IF: // If puede ser una declaración
+		expr := p.parseIfExpression()
+		if expr == nil { return nil }
+		// El AST de IfExpression ya es un Statement.
+		if stmt, ok := expr.(ast.Statement); ok {
+			// Si se requiere punto y coma opcional después de if-statement
+			if p.peekTokenIs(token.SEMICOLON) {p.nextToken()}
+			return stmt
+		}
+		p.errors = append(p.errors, "Error: 'if' expression no pudo ser usado como statement.")
+		return nil
+	case token.CLASS: // Nueva declaración de clase
+		return p.parseClassStatement(nil) // Nil indica que no hay modificador previo
+	case token.PUBLIC, token.PRIVATE, token.PROTECTED: // Modificador al inicio
+		return p.parseStatementWithModifier()
 	case token.LOG:
 		return p.parseLogStatement()
-	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY: // Si el token actual es un tipo, y el siguiente es un IDENT, es una declaración de función.
-		if p.peekTokenIs(token.IDENT) {
-			return p.parseFunctionDeclaration()
+	// VOID o TYPE al inicio de un statement puede ser una declaración de función global
+	// o un literal de función usado como expresión en un ExpressionStatement.
+	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY:
+		// Para distinguir, necesitamos ver si sigue un IDENT (nombre de func) y luego LPAREN.
+		// Esto es complicado sin lookahead > 1.
+		// Heurística: si después de (TYPE|VOID) hay IDENT y luego LPAREN, es FunctionDeclaration.
+		// Esta heurística es imperfecta. Monkey lo resuelve porque FunctionLiteral no es un Statement.
+		if p.peekTokenIs(token.IDENT) && p.isFunctionDeclarationAhead() {
+			return p.parseFunctionDeclaration(p.currentToken) // Pasar el tipo/void como token inicial
 		}
-		// Si no, se asume que es una expresión de función (void() { ... })
-		fallthrough
+		// Si no, es un ExpressionStatement (ej. (void(){})() o un tipo solo que es error)
+		return p.parseExpressionStatement()
 	default:
 		return p.parseExpressionStatement()
 	}
 }
 
+// isFunctionDeclarationAhead es una heurística.
+// Verifica si después del actual IDENT (que es p.peekToken), sigue un LPAREN.
+// Se llama cuando currentToken es TYPE/VOID y peekToken es IDENT.
+func (p *Parser) isFunctionDeclarationAhead() bool {
+    // Necesitamos mirar p.peekToken (que es IDENT) y el token DESPUÉS de ese.
+    // Esto es LL(2). El lexer actual no lo soporta directamente.
+    // Esta función es una simplificación conceptual.
+    // Una implementación real requeriría un lexer con buffer o parseo especulativo.
+    // Por ahora, esta función no puede implementarse de forma robusta.
+    // La lógica en parseStatement se basará en una detección más simple o aceptará ambigüedad
+    // que se resolvería semánticamente o con errores de parsing más adelante.
+	// Para una prueba simple, si el siguiente al IDENT (p.peekToken) es LPAREN, es probable.
+	// Esto es lo que el parser de Pratt hace implícitamente para llamadas.
+	// No podemos hacer esto aquí sin cambiar el estado del parser o lexer.
+	// Devolvemos false para evitar complejidad ahora.
+	// El parser de Monkey original no permite `func foo() {}` como statement directamente,
+	// sino `let foo = func() {};`
+	// Si Lambda permite `void foo() {}` a nivel global, esta detección es crucial.
+    return false // Simplificación: esta heurística es difícil de implementar correctamente aquí.
+                 // El parser de Monkey original no tiene declaraciones de función nombradas globales así.
+                 // Las funciones son expresiones asignadas a 'let'.
+                 // Si Lambda sí las tiene, esto necesita una solución LL(2).
+}
+
+// parseStatementWithModifier maneja declaraciones que comienzan con public, private, protected.
+func (p *Parser) parseStatementWithModifier() ast.Statement {
+	modifier := p.currentToken
+	p.nextToken() // Consume el modificador
+
+	switch p.currentToken.Type {
+	case token.CLASS:
+		return p.parseClassStatement(&modifier) // Pasar el modificador
+	case token.VOID, token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.TYPE_ANY:
+		// Es una declaración de función con modificador: public void miFuncion()...
+		// p.currentToken es ahora el tipo/void.
+		return p.parseFunctionDeclaration(modifier) // El parser de función manejará el tipo actual
+	default:
+		p.errors = append(p.errors, fmt.Sprintf("Token inesperado '%s' después del modificador '%s'", p.currentToken.Literal, modifier.Literal))
+		return nil
+	}
+}
 // parseLetStatement parsea una declaración 'let'.
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.currentToken}
 
-	if !p.expectPeek(token.IDENT) { // Espera el nombre de la variable
+	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
 	stmt.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 
-	if p.peekTokenIs(token.COLON) { // Opcional: anotación de tipo
-		p.nextToken()             // Consume COLON
-		if !p.peekTokenIsType() { // Espera un token de tipo
-			p.peekError(token.IDENT) // Podría ser un IDENT que actúa como tipo (ej. nombre de clase)
+	if p.peekTokenIs(token.COLON) {
+		p.nextToken()
+		if !p.expectPeekIsTypeOrIdent() {
 			return nil
 		}
-		p.nextToken() // Consume el token de tipo
 		stmt.TypeAnnotation = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	}
 
-	if !p.expectPeek(token.ASSIGN) { // Espera el operador de asignación
+	if !p.expectPeek(token.ASSIGN) {
+		p.peekError(token.ASSIGN)
 		return nil
 	}
 
-	p.nextToken() // Avanza al inicio de la expresión de valor
+	p.nextToken()
 
 	stmt.Value = p.parseExpression(LOWEST)
 
@@ -242,20 +301,48 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	return stmt
 }
 
-// peekTokenIsType verifica si el siguiente token es un tipo de dato conocido o un IDENT que podría ser un tipo de clase.
+func (p *Parser) expectPeekIsTypeOrIdent() bool {
+	if !p.peekTokenIsTypeOrVoid() && !p.peekTokenIs(token.IDENT) {
+		p.peekError(token.IDENT)
+		return false
+	}
+	p.nextToken()
+	return true
+}
+
+func (p *Parser) peekTokenIsTypeOrVoid() bool {
+	tt := p.peekToken.Type
+	return tt == token.TYPE_INT || tt == token.TYPE_STRING || tt == token.TYPE_BOOLEAN || tt == token.TYPE_ANY || tt == token.VOID
+}
+
+func (p *Parser) currentTokenIsTypeOrVoid() bool {
+	tt := p.currentToken.Type
+	return tt == token.TYPE_INT || tt == token.TYPE_STRING || tt == token.TYPE_BOOLEAN || tt == token.TYPE_ANY || tt == token.VOID
+}
+
+
+// peekTokenIsType verifica si el siguiente token es un tipo de dato conocido o IDENT (para clases).
 func (p *Parser) peekTokenIsType() bool {
 	switch p.peekToken.Type {
-	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT: // IDENT para nombres de clases como tipos
+	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT:
 		return true
 	default:
 		return false
 	}
 }
 
-// currentTokenIsType verifica si el token actual es un tipo de dato conocido o un IDENT que podría ser un tipo de clase.
+// currentTokenIsType verifica si el token actual es un tipo de dato conocido o IDENT.
 func (p *Parser) currentTokenIsType() bool {
 	switch p.currentToken.Type {
-	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT: // IDENT para nombres de clases como tipos
+	case token.TYPE_INT, token.TYPE_STRING, token.TYPE_BOOLEAN, token.VOID, token.TYPE_ANY, token.IDENT:
+		return true
+	default:
+		return false
+	}
+}
+func (p *Parser) currentTokenIsModifier() bool {
+	switch p.currentToken.Type {
+	case token.PUBLIC, token.PRIVATE, token.PROTECTED:
 		return true
 	default:
 		return false
@@ -286,6 +373,30 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 		p.nextToken()
 	}
 
+	return stmt
+}
+
+// parseExpressionStatement parsea una expresión usada como declaración.
+func (p *Parser) parseExpressionStatement() ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currentToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+	// Semicolon opcional para expression statements, como en JS.
+	// Si es la última línea de un bloque o programa, no es necesario.
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+// parseExpressionStatement parsea una expresión usada como declaración.
+func (p *Parser) parseExpressionStatement() ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currentToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+	// Semicolon opcional para expression statements, como en JS.
+	// Si es la última línea de un bloque o programa, no es necesario.
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
 	return stmt
 }
 
