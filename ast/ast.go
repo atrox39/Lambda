@@ -292,6 +292,7 @@ func (ce *CallExpression) String() string {
 }
 
 // BlockStatement representa un bloque de código (ej. { ... }).
+// También se usará para el cuerpo de la clase.
 type BlockStatement struct {
 	Token      token.Token // El token LBRACE
 	Statements []Statement // Las declaraciones dentro del bloque
@@ -318,7 +319,7 @@ type IfExpression struct {
 }
 
 func (ie *IfExpression) expressionNode()      {}
-func (ie *IfExpression) statementNode()       {} // ¡Añadido! IfExpression ahora implementa Statement
+func (ie *IfExpression) statementNode()       {}
 func (ie *IfExpression) TokenLiteral() string { return ie.Token.Literal }
 func (ie *IfExpression) String() string {
 	var out strings.Builder
@@ -397,27 +398,6 @@ func (de *DotExpression) String() string {
 	return out.String()
 }
 
-// NewExpression representa una expresión 'new' (ej. new ClassName(args)).
-type NewExpression struct {
-	Token     token.Token  // El token NEW
-	Class     *Identifier  // El identificador de la clase
-	Arguments []Expression // Los argumentos del constructor
-}
-
-func (ne *NewExpression) expressionNode()      {}
-func (ne *NewExpression) TokenLiteral() string { return ne.Token.Literal }
-func (ne *NewExpression) String() string {
-	var out strings.Builder
-	args := []string{}
-	for _, a := range ne.Arguments {
-		args = append(args, a.String())
-	}
-	out.WriteString("new " + ne.Class.String() + "(")
-	out.WriteString(strings.Join(args, ", "))
-	out.WriteString(")")
-	return out.String()
-}
-
 // ModuleStatement representa una declaración 'module' (ej. module let x = 10;).
 type ModuleStatement struct {
 	Token token.Token // El token MODULE
@@ -439,12 +419,14 @@ func (ms *ModuleStatement) String() string {
 	return out.String()
 }
 
+// --- Nuevos Nodos AST para Clases ---
+
 // ClassStatement representa una declaración de clase.
 type ClassStatement struct {
 	Token      token.Token     // El CLASS token
 	Name       *Identifier     // El nombre de la clase
 	SuperClass *Identifier     // Opcional: El nombre de la superclase si 'extends' es usado
-	Body       *BlockStatement // El cuerpo de la clase, conteniendo métodos y propiedades
+	Body       *BlockStatement // El cuerpo de la clase, conteniendo PropertyDeclaration y MethodDeclaration
 }
 
 func (cs *ClassStatement) statementNode()       {}
@@ -455,17 +437,59 @@ func (cs *ClassStatement) String() string {
 	if cs.SuperClass != nil {
 		out.WriteString(" extends " + cs.SuperClass.String())
 	}
-	out.WriteString(" {")
-	if cs.Body != nil {
+	out.WriteString(" ") // Espacio antes del cuerpo
+	if cs.Body != nil {   // El cuerpo es un BlockStatement que ya incluye { }
 		out.WriteString(cs.Body.String())
+	} else {
+		out.WriteString("{}") // Si el cuerpo está vacío
 	}
-	out.WriteString("}")
+	return out.String()
+}
+
+// PropertyDeclaration representa una propiedad dentro de una clase.
+type PropertyDeclaration struct {
+	Token          token.Token // El token del modificador (PUBLIC, PRIVATE, PROTECTED) o LET si es implícito público
+	Modifier       token.Token // Guardamos el token del modificador explícito
+	IsStatic       bool        // Nuevo: true si la propiedad es estática
+	Name           *Identifier // El nombre de la propiedad
+	TypeAnnotation *Identifier // Opcional: la anotación de tipo (ej. "int")
+	Value          Expression  // Opcional: El valor inicial de la propiedad
+}
+
+func (pd *PropertyDeclaration) statementNode()       {}
+func (pd *PropertyDeclaration) TokenLiteral() string { return pd.Modifier.Literal }
+func (pd *PropertyDeclaration) String() string {
+	var out strings.Builder
+	if pd.Modifier.Type == token.PUBLIC || pd.Modifier.Type == token.PRIVATE || pd.Modifier.Type == token.PROTECTED {
+		out.WriteString(pd.Modifier.Literal + " ")
+	}
+	if pd.IsStatic {
+		out.WriteString("static ")
+	}
+	// Si es público implícito (Modifier no es P/P/P y Token original era LET), no se imprime "let"
+    // Esta lógica de impresión de "let" es compleja si Modifier puede ser LET.
+    // Asumimos que si Modifier es LET, es porque no hubo public/private/protected explícito.
+    // Y si es LET y no es estático, es una propiedad de instancia pública implícita.
+    // Si es LET y ESTÁTICO, la sintaxis sería "static let", lo cual es redundante si static implica let.
+    // Por ahora, si `IsStatic` es true, imprimimos "static". Si hay Modifier explícito, se imprime.
+    // El "let" implícito para propiedades de instancia no estáticas no se imprime.
+
+	out.WriteString(pd.Name.String())
+	if pd.TypeAnnotation != nil {
+		out.WriteString(": " + pd.TypeAnnotation.String())
+	}
+	if pd.Value != nil {
+		out.WriteString(" = " + pd.Value.String())
+	}
+	out.WriteString(";")
 	return out.String()
 }
 
 // MethodDeclaration representa un método dentro de una clase.
 type MethodDeclaration struct {
-	Token         token.Token     // El VOID token (o IDENT para constructor, o un tipo de retorno)
+	Token         token.Token     // El token del modificador (PUBLIC, PRIVATE, PROTECTED) o el tipo de retorno si es implícito público
+	Modifier      token.Token     // Guardamos el token del modificador explícito
+	IsStatic      bool            // Nuevo: true si el método es estático
 	ReturnType    *Identifier     // El tipo de retorno explícito (ej. "void", "int")
 	Name          *Identifier     // El nombre del método (o clase para constructor)
 	Parameters    []*Parameter    // Los parámetros del método
@@ -474,9 +498,16 @@ type MethodDeclaration struct {
 }
 
 func (md *MethodDeclaration) statementNode()       {}
-func (md *MethodDeclaration) TokenLiteral() string { return md.Token.Literal }
+func (md *MethodDeclaration) TokenLiteral() string { return md.Modifier.Literal }
 func (md *MethodDeclaration) String() string {
 	var out strings.Builder
+	if md.Modifier.Type == token.PUBLIC || md.Modifier.Type == token.PRIVATE || md.Modifier.Type == token.PROTECTED {
+		out.WriteString(md.Modifier.Literal + " ")
+	}
+	if md.IsStatic {
+		out.WriteString("static ")
+	}
+
 	if !md.IsConstructor && md.ReturnType != nil {
 		out.WriteString(md.ReturnType.String() + " ")
 	}
@@ -488,35 +519,46 @@ func (md *MethodDeclaration) String() string {
 	}
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(")")
-	if md.ReturnType != nil && !md.IsConstructor { // Vuelve a añadir el tipo de retorno después de los paréntesis
-		out.WriteString(": " + md.ReturnType.String())
-	}
-	if md.Body != nil {
-		out.WriteString(md.Body.String())
+	// El tipo de retorno para constructores no se imprime.
+	// Para métodos, si hay un tipo de retorno explícito después de los parámetros (como en TypeScript), se añadiría aquí.
+	// Por ahora, el diseño lo pone antes del nombre del método.
+	if md.Body != nil { // El cuerpo es un BlockStatement que ya incluye { }
+		out.WriteString(" " + md.Body.String())
+	} else {
+		out.WriteString(" {}") // Si el cuerpo está vacío (no debería pasar para métodos bien formados)
 	}
 	return out.String()
 }
 
-// PropertyDeclaration representa una propiedad dentro de una clase.
-type PropertyDeclaration struct {
-	Token          token.Token // El LET token (o otro modificador de visibilidad)
-	Name           *Identifier // El nombre de la propiedad
-	TypeAnnotation *Identifier // Opcional: la anotación de tipo (ej. "int")
-	Value          Expression  // Opcional: El valor inicial de la propiedad
+// NewExpression representa una expresión 'new' (ej. new ClassName(args)).
+type NewExpression struct {
+	Token     token.Token  // El token NEW
+	Class     *Identifier  // El identificador de la clase
+	Arguments []Expression // Los argumentos del constructor
 }
 
-func (pd *PropertyDeclaration) statementNode()       {}
-func (pd *PropertyDeclaration) TokenLiteral() string { return pd.Token.Literal }
-func (pd *PropertyDeclaration) String() string {
+func (ne *NewExpression) expressionNode()      {}
+func (ne *NewExpression) TokenLiteral() string { return ne.Token.Literal }
+func (ne *NewExpression) String() string {
 	var out strings.Builder
-	out.WriteString(pd.TokenLiteral() + " ")
-	out.WriteString(pd.Name.String())
-	if pd.TypeAnnotation != nil {
-		out.WriteString(": " + pd.TypeAnnotation.String())
+	args := []string{}
+	for _, a := range ne.Arguments {
+		args = append(args, a.String())
 	}
-	if pd.Value != nil {
-		out.WriteString(" = " + pd.Value.String())
-	}
-	out.WriteString(";")
+	out.WriteString("new " + ne.Class.String() + "(")
+	out.WriteString(strings.Join(args, ", "))
+	out.WriteString(")")
 	return out.String()
 }
+
+// ThisExpression representa la palabra clave 'this'.
+// Será parseado como un Identifier con valor "this", pero podemos tener un nodo específico si es necesario
+// por ahora, lo manejaremos como un Identifier especial en el evaluador.
+// Para mantener la consistencia con el diseño, lo añadimos aunque el parser lo genere como Identifier.
+type ThisExpression struct {
+	Token token.Token // El token THIS
+}
+
+func (te *ThisExpression) expressionNode()      {}
+func (te *ThisExpression) TokenLiteral() string { return te.Token.Literal }
+func (te *ThisExpression) String() string       { return "this" }
