@@ -15,7 +15,7 @@ Para empezar con Lambda, necesitarás tener Go instalado en tu sistema.
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone https://github.com/your-username/lambda.git # Reemplaza con la URL real de tu repositorio
+    git clone https://github.com/atrox39/Lambda.git # Reemplaza con la URL real de tu repositorio
     cd Lambda
     ```
 
@@ -25,7 +25,7 @@ Para empezar con Lambda, necesitarás tener Go instalado en tu sistema.
     ```bash
     go run main.go
     ```
-    *(Las instrucciones adicionales sobre cómo usar el intérprete dependerán de su implementación, por ejemplo, `go run main.go <tu_script.lambda>` o simplemente `go run main.go` para un REPL)*
+    *(Las instrucciones adicionales sobre cómo usar el intérprete dependerán de su implementación, por ejemplo, `go run main.go <tu_script.ld>` o simplemente `go run main.go` para un REPL)*
 
 ## Ejemplo
 
