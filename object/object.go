@@ -120,11 +120,10 @@ func (f *Function) Inspect() string {
 	if f.IsStatic {
 		out.WriteString("static ")
 	}
-	out.WriteString("fn ")
+out.WriteString("fn ")
 	if f.Name != "" {
 		out.WriteString(f.Name)
 	}
-	var out strings.Builder
 
 	params := []string{}
 	for _, p := range f.Parameters {

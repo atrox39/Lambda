@@ -193,17 +193,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseLetStatement()
 	case token.RETURN:
 		return p.parseReturnStatement()
-	case token.IF: // If puede ser una declaración
-		expr := p.parseIfExpression()
-		if expr == nil { return nil }
-		// El AST de IfExpression ya es un Statement.
-		if stmt, ok := expr.(ast.Statement); ok {
-			// Si se requiere punto y coma opcional después de if-statement
-			if p.peekTokenIs(token.SEMICOLON) {p.nextToken()}
-			return stmt
-		}
-		p.errors = append(p.errors, "Error: 'if' expression no pudo ser usado como statement.")
-		return nil
+	case token.IF:
+		return p.parseIfExpression()
 	case token.CLASS: // Nueva declaración de clase
 		return p.parseClassStatement(nil) // Nil indica que no hay modificador previo
 	case token.PUBLIC, token.PRIVATE, token.PROTECTED: // Modificador al inicio
@@ -376,29 +367,9 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
-// parseExpressionStatement parsea una expresión usada como declaración.
-func (p *Parser) parseExpressionStatement() ast.ExpressionStatement {
-	stmt := &ast.ExpressionStatement{Token: p.currentToken}
-	stmt.Expression = p.parseExpression(LOWEST)
-	// Semicolon opcional para expression statements, como en JS.
-	// Si es la última línea de un bloque o programa, no es necesario.
-	if p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-	return stmt
-}
 
-// parseExpressionStatement parsea una expresión usada como declaración.
-func (p *Parser) parseExpressionStatement() ast.ExpressionStatement {
-	stmt := &ast.ExpressionStatement{Token: p.currentToken}
-	stmt.Expression = p.parseExpression(LOWEST)
-	// Semicolon opcional para expression statements, como en JS.
-	// Si es la última línea de un bloque o programa, no es necesario.
-	if p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-	return stmt
-}
+
+
 
 // parseIdentifier parsea un identificador.
 func (p *Parser) parseIdentifier() ast.Expression {
@@ -499,9 +470,9 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 }
 
 // parseFunctionDeclaration parsea una declaración de función (void funcName(int a, string b): int { ... }).
-func (p *Parser) parseFunctionDeclaration() *ast.FunctionDeclaration {
-	// currentToken es el tipo de retorno (ej. VOID, TYPE_INT, etc.)
-	decl := &ast.FunctionDeclaration{Token: p.currentToken, ReturnType: &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}}
+func (p *Parser) parseFunctionDeclaration(initialToken token.Token) *ast.FunctionDeclaration {
+	// initialToken es el tipo de retorno (ej. VOID, TYPE_INT, etc.) o el modificador
+	decl := &ast.FunctionDeclaration{Token: initialToken, ReturnType: &ast.Identifier{Token: initialToken, Value: initialToken.Literal}}
 
 	if !p.expectPeek(token.IDENT) { // Espera el nombre de la función
 		return nil
@@ -650,8 +621,8 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	return block
 }
 
-// parseIfStatement parsea una declaración 'if'.
-func (p *Parser) parseIfStatement() ast.Statement {
+// parseIfExpression parsea una expresión 'if'.
+func (p *Parser) parseIfExpression() ast.Statement {
 	expression := &ast.IfExpression{Token: p.currentToken}
 
 	if !p.expectPeek(token.LPAREN) { // Espera '(' después de 'if'
@@ -768,7 +739,7 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 		// currentToken es el tipo de retorno.
 		// Peek el IDENT para el nombre de la función para diferenciar de FunctionLiteral.
 		if p.peekTokenIs(token.IDENT) {
-			funcDecl := p.parseFunctionDeclaration()
+			funcDecl := p.parseFunctionDeclaration(p.currentToken)
 			if funcDecl == nil {
 				return nil
 			}
@@ -779,7 +750,7 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 			return nil
 		}
 	case token.CLASS:
-		classStmt := p.parseClassStatement()
+		classStmt := p.parseClassStatement(nil)
 		if classStmt == nil {
 			return nil
 		}
@@ -801,7 +772,7 @@ func (p *Parser) parseModuleStatement() *ast.ModuleStatement {
 }
 
 // parseClassStatement parsea una declaración 'class'.
-func (p *Parser) parseClassStatement() *ast.ClassStatement {
+func (p *Parser) parseClassStatement(modifier *token.Token) *ast.ClassStatement {
 	stmt := &ast.ClassStatement{Token: p.currentToken}
 
 	if !p.expectPeek(token.IDENT) { // Espera el nombre de la clase
@@ -1002,4 +973,8 @@ func (p *Parser) parseNewExpression() ast.Expression {
 	}
 	exp.Arguments = p.parseCallArguments() // Reutiliza parseCallArguments
 	return exp
+}
+
+func (p *Parser) parseThisExpression() ast.Expression {
+	return &ast.ThisExpression{Token: p.currentToken}
 }

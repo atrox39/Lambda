@@ -6,7 +6,7 @@ import (
 
 	"github.com/atrox39/lambda/ast"
 	"github.com/atrox39/lambda/object"
-	"github.com/atrox39/lambda/token"
+	
 )
 
 var (
@@ -529,6 +529,4 @@ var builtins = map[string]*object.Builtin{
 		},
 	},
 }
-```
 
-Con esto, el evaluador ahora tiene la lógica fundamental para manejar clases y miembros estáticos. Los modificadores de acceso siguen siendo un TODO.
